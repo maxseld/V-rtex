@@ -4,51 +4,91 @@ import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
 import { Editor } from './pages/Editor';
 import { VSLConfig, DEFAULT_VSL } from './types';
+import { supabase } from './lib/supabase';
 
 function App() {
   const [activePage, setActivePage] = useState<'auth' | 'dashboard' | 'editor'>('auth');
   const [userEmail, setUserEmail] = useState<string>('');
   const [projects, setProjects] = useState<VSLConfig[]>([]);
   const [currentProject, setCurrentProject] = useState<VSLConfig>(DEFAULT_VSL);
+  const [loading, setLoading] = useState(true);
 
-  // Load mocks on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('vortex_projects');
-    if (saved) {
-      setProjects(JSON.parse(saved));
-    } else {
-        // Mock initial Data
-        setProjects([
-            {
-                ...DEFAULT_VSL,
-                id: '1',
-                name: 'VSL Oferta Black Friday',
-                views: 1240,
-                primaryColor: '#ef4444',
-                lastEdited: new Date().toISOString()
-            },
-            {
-                ...DEFAULT_VSL,
-                id: '2',
-                name: 'Lead Magnet - Vertical',
-                ratio: '9:16',
-                views: 532,
-                primaryColor: '#22c55e',
-                lastEdited: new Date(Date.now() - 86400000).toISOString()
-            }
-        ]);
+  // Buscar projetos do Supabase
+  const fetchProjects = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .order('last_edited', { ascending: false });
+
+    if (error) {
+      console.error('Erro ao buscar projetos:', error);
+      return;
     }
-  }, []);
+
+    if (data) {
+      const formattedProjects: VSLConfig[] = data.map(item => ({
+        id: item.id,
+        name: item.name,
+        videoUrl: item.video_url,
+        ratio: item.ratio as any,
+        primaryColor: item.primary_color,
+        retentionSpeed: item.retention_speed,
+        hasDelay: item.has_delay,
+        delaySeconds: item.delay_seconds,
+        views: item.views || 0,
+        lastEdited: item.last_edited
+      }));
+      setProjects(formattedProjects);
+    }
+  };
+
+  // Verificar sessão inicial e configurar listener
+  useEffect(() => {
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUserEmail(session.user.email!);
+        setActivePage('dashboard');
+        await fetchProjects();
+      }
+      setLoading(false);
+    };
+
+    initializeAuth();
+
+    // Ouvinte de mudanças de auth para lidar com Login/Logout em tempo real
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setUserEmail(session.user.email!);
+        if (activePage === 'auth') {
+          setActivePage('dashboard');
+          await fetchProjects();
+        }
+      } else {
+        setUserEmail('');
+        setActivePage('auth');
+        setProjects([]);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [activePage]);
 
   const handleLogin = (email: string) => {
     setUserEmail(email);
     setActivePage('dashboard');
+    fetchProjects();
   };
 
   const handleCreateNew = () => {
     setCurrentProject({
       ...DEFAULT_VSL,
-      id: Date.now().toString(),
+      id: '',
       name: 'Novo Projeto VSL',
       lastEdited: new Date().toISOString()
     });
@@ -60,21 +100,69 @@ function App() {
     setActivePage('editor');
   };
 
-  const handleSaveProject = (updatedConfig: VSLConfig) => {
-    const exists = projects.find(p => p.id === updatedConfig.id);
-    let newProjects;
-    
-    if (exists) {
-      newProjects = projects.map(p => p.id === updatedConfig.id ? {...updatedConfig, lastEdited: new Date().toISOString()} : p);
+  const handleDeleteProject = async (id: string) => {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      alert('Erro ao excluir projeto: ' + error.message);
     } else {
-      newProjects = [...projects, {...updatedConfig, lastEdited: new Date().toISOString()}];
+      setProjects(prev => prev.filter(p => p.id !== id));
     }
-    
-    setProjects(newProjects);
-    localStorage.setItem('vortex_projects', JSON.stringify(newProjects));
-    // Don't navigate back immediately, let user see feedback or copy code
-    // Optional: Toast notification here
   };
+
+  const handleSaveProject = async (updatedConfig: VSLConfig) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const projectData = {
+      name: updatedConfig.name,
+      video_url: updatedConfig.videoUrl,
+      ratio: updatedConfig.ratio,
+      primary_color: updatedConfig.primaryColor,
+      retention_speed: updatedConfig.retentionSpeed,
+      has_delay: updatedConfig.hasDelay,
+      delay_seconds: updatedConfig.delaySeconds,
+      user_id: user.id,
+      last_edited: new Date().toISOString()
+    };
+
+    let error;
+
+    if (updatedConfig.id && updatedConfig.id !== '') {
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update(projectData)
+        .eq('id', updatedConfig.id);
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('projects')
+        .insert([projectData]);
+      error = insertError;
+    }
+
+    if (error) {
+      console.error('Erro ao salvar projeto:', error);
+      alert('Falha ao salvar no banco de dados. Verifique sua conexão.');
+    } else {
+      await fetchProjects();
+      setActivePage('dashboard');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-vortex-accent/20 border-t-vortex-accent rounded-full animate-spin"></div>
+          <p className="text-slate-500 text-sm font-medium animate-pulse">Sincronizando Vortex...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Layout activePage={activePage} onNavigate={setActivePage} userEmail={userEmail}>
@@ -85,6 +173,7 @@ function App() {
           projects={projects} 
           onCreateNew={handleCreateNew} 
           onEdit={handleEditProject}
+          onDelete={handleDeleteProject}
         />
       )}
       
@@ -92,7 +181,10 @@ function App() {
         <Editor 
           initialConfig={currentProject} 
           onSave={handleSaveProject}
-          onBack={() => setActivePage('dashboard')}
+          onBack={() => {
+            fetchProjects();
+            setActivePage('dashboard');
+          }}
         />
       )}
     </Layout>

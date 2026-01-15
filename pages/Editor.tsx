@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, ArrowLeft, Copy, Monitor, Smartphone, Video, Sliders, Palette, Clock, Check } from 'lucide-react';
+import { Save, ArrowLeft, Copy, Monitor, Smartphone, Video, Sliders, Palette, Clock, Check, Loader2 } from 'lucide-react';
 import { VSLConfig } from '../types';
 import { generateVSLCode } from '../utils/generator';
 
 interface EditorProps {
   initialConfig: VSLConfig;
-  onSave: (config: VSLConfig) => void;
+  onSave: (config: VSLConfig) => Promise<void>;
   onBack: () => void;
 }
 
@@ -13,6 +13,7 @@ export const Editor: React.FC<EditorProps> = ({ initialConfig, onSave, onBack })
   const [config, setConfig] = useState<VSLConfig>(initialConfig);
   const [activeTab, setActiveTab] = useState<'desktop' | 'mobile'>('desktop');
   const [copied, setCopied] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [activeAccordion, setActiveAccordion] = useState<'video' | 'style' | 'behavior'>('video');
 
   // Preview State simulation
@@ -41,7 +42,6 @@ export const Editor: React.FC<EditorProps> = ({ initialConfig, onSave, onBack })
 
     const handleTimeUpdate = () => {
         if (video.duration) {
-            // Formula: Math.pow((currentTime / duration), curvaturaSensorial) * 100
             const pct = Math.pow((video.currentTime / video.duration), config.retentionSpeed) * 100;
             setProgress(pct);
         }
@@ -67,6 +67,16 @@ export const Editor: React.FC<EditorProps> = ({ initialConfig, onSave, onBack })
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+        await onSave(config);
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const togglePlay = () => {
@@ -105,10 +115,12 @@ export const Editor: React.FC<EditorProps> = ({ initialConfig, onSave, onBack })
           </button>
           <div className="flex gap-2">
             <button 
-              onClick={() => onSave(config)}
-              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              <Save size={16} /> Salvar
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {isSaving ? 'Salvando...' : 'Salvar'}
             </button>
             <button 
               onClick={handleCopyCode}

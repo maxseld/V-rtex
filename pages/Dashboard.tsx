@@ -1,14 +1,22 @@
-import React from 'react';
-import { Plus, Play, Calendar, MoreVertical, Search, BarChart3 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Play, Calendar, Trash2, Search, BarChart3, AlertTriangle } from 'lucide-react';
 import { VSLConfig } from '../types';
 
 interface DashboardProps {
   projects: VSLConfig[];
   onCreateNew: () => void;
   onEdit: (project: VSLConfig) => void;
+  onDelete: (id: string) => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ projects, onCreateNew, onEdit }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ projects, onCreateNew, onEdit, onDelete }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const filteredProjects = projects.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
@@ -35,35 +43,45 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, onCreateNew, onE
         <input 
           type="text" 
           placeholder="Buscar projetos..." 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
           className="bg-transparent border-none focus:outline-none text-white w-full placeholder-slate-600"
         />
       </div>
 
       {/* Projects Grid */}
-      {projects.length === 0 ? (
+      {filteredProjects.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/30">
           <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-500">
             <Play size={32} />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">Nenhum projeto ainda</h3>
-          <p className="text-slate-400 mb-6 max-w-sm mx-auto">Crie sua primeira VSL otimizada para conversão agora mesmo.</p>
-          <button 
-            onClick={onCreateNew}
-            className="text-vortex-accent hover:text-white font-medium hover:underline"
-          >
-            Criar primeiro projeto
-          </button>
+          <h3 className="text-xl font-semibold text-white mb-2">
+            {searchTerm ? 'Nenhum projeto encontrado' : 'Nenhum projeto ainda'}
+          </h3>
+          <p className="text-slate-400 mb-6 max-w-sm mx-auto">
+            {searchTerm ? 'Tente buscar por outro termo ou limpe o filtro.' : 'Crie sua primeira VSL otimizada para conversão agora mesmo.'}
+          </p>
+          {!searchTerm && (
+            <button 
+              onClick={onCreateNew}
+              className="text-vortex-accent hover:text-white font-medium hover:underline"
+            >
+              Criar primeiro projeto
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
+          {filteredProjects.map((project) => (
             <div 
               key={project.id} 
-              className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-vortex-accent/50 transition-all duration-300 hover:shadow-xl hover:shadow-blue-900/10 cursor-pointer flex flex-col h-full"
-              onClick={() => onEdit(project)}
+              className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-vortex-accent/50 transition-all duration-300 hover:shadow-xl hover:shadow-blue-900/10 flex flex-col h-full"
             >
               {/* Thumbnail Mockup */}
-              <div className="aspect-video bg-slate-950 relative overflow-hidden group-hover:opacity-90 transition-opacity">
+              <div 
+                className="aspect-video bg-slate-950 relative overflow-hidden group-hover:opacity-90 transition-opacity cursor-pointer"
+                onClick={() => onEdit(project)}
+              >
                 <div className="absolute inset-0 flex items-center justify-center bg-slate-900/50">
                    <div 
                       className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg"
@@ -79,10 +97,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, onCreateNew, onE
 
               <div className="p-5 flex flex-col flex-1">
                 <div className="flex justify-between items-start mb-3">
-                  <h3 className="font-bold text-lg text-white group-hover:text-vortex-accent transition-colors line-clamp-1">{project.name}</h3>
-                  <button className="text-slate-500 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors">
-                    <MoreVertical size={16} />
-                  </button>
+                  <h3 
+                    className="font-bold text-lg text-white group-hover:text-vortex-accent transition-colors line-clamp-1 cursor-pointer"
+                    onClick={() => onEdit(project)}
+                  >
+                    {project.name}
+                  </h3>
+                  
+                  {confirmDeleteId === project.id ? (
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => onDelete(project.id)}
+                            className="text-red-500 hover:text-red-400 p-1"
+                            title="Confirmar Exclusão"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                        <button 
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="text-slate-500 hover:text-white text-[10px] font-bold"
+                        >
+                            CANCELAR
+                        </button>
+                    </div>
+                  ) : (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(project.id); }}
+                        className="text-slate-600 hover:text-red-500 p-1 rounded-md hover:bg-slate-800 transition-colors"
+                        title="Excluir Projeto"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
                 
                 <div className="mt-auto flex items-center justify-between text-sm text-slate-400 border-t border-slate-800 pt-4">
@@ -98,6 +144,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ projects, onCreateNew, onE
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {confirmDeleteId && (
+        <div className="fixed bottom-4 right-4 bg-red-900/90 border border-red-500 text-white p-4 rounded-xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-right-full z-50">
+            <AlertTriangle size={24} className="text-red-200" />
+            <div>
+                <p className="text-sm font-bold">Atenção!</p>
+                <p className="text-xs text-red-100">Confirme a exclusão do projeto. Esta ação é irreversível.</p>
+            </div>
+            <button 
+                onClick={() => setConfirmDeleteId(null)}
+                className="bg-white/10 hover:bg-white/20 px-3 py-1 rounded text-xs font-bold"
+            >
+                Fechar
+            </button>
         </div>
       )}
     </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Zap, Lock, Mail, ArrowRight } from 'lucide-react';
+import { Zap, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface AuthProps {
   onLogin: (email: string) => void;
@@ -10,42 +11,71 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    setError(null);
+
+    try {
+      if (isLogin) {
+        const { error: signInError, data } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) throw signInError;
+        if (data.user) onLogin(data.user.email!);
+      } else {
+        const { error: signUpError, data } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        if (signUpError) throw signUpError;
+        if (data.user) {
+          alert('Conta criada com sucesso! Por favor, verifique seu e-mail.');
+          setIsLogin(true);
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Ocorreu um erro na autenticação.');
+    } finally {
       setLoading(false);
-      onLogin(email || 'demo@vortexvsl.com');
-    }, 1000);
+    }
   };
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full max-w-md animate-in fade-in zoom-in duration-300">
       <div className="text-center mb-8">
         <div className="w-12 h-12 rounded-xl bg-vortex-accent mx-auto flex items-center justify-center shadow-[0_0_25px_rgba(37,99,235,0.6)] mb-4">
           <Zap className="text-white w-7 h-7" fill="currentColor" />
         </div>
-        <h1 className="text-3xl font-bold text-white mb-2">Bem-vindo ao Vortex</h1>
-        <p className="text-slate-400">A plataforma definitiva para VSLs de alta conversão.</p>
+        <h1 className="text-3xl font-bold text-white mb-2">Vortex VSL</h1>
+        <p className="text-slate-400">Entre na sua conta para gerenciar seus players.</p>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
         <div className="flex gap-4 mb-6 border-b border-slate-800 pb-4">
           <button 
             className={`flex-1 pb-2 text-sm font-medium transition-all ${isLogin ? 'text-vortex-accent border-b-2 border-vortex-accent' : 'text-slate-500 hover:text-slate-300'}`}
-            onClick={() => setIsLogin(true)}
+            onClick={() => { setIsLogin(true); setError(null); }}
           >
             Entrar
           </button>
           <button 
             className={`flex-1 pb-2 text-sm font-medium transition-all ${!isLogin ? 'text-vortex-accent border-b-2 border-vortex-accent' : 'text-slate-500 hover:text-slate-300'}`}
-            onClick={() => setIsLogin(false)}
+            onClick={() => { setIsLogin(false); setError(null); }}
           >
             Criar Conta
           </button>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-400 text-sm">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -87,7 +117,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
             ) : (
               <>
-                {isLogin ? 'Acessar Dashboard' : 'Começar Agora'} <ArrowRight size={18} />
+                {isLogin ? 'Acessar Dashboard' : 'Criar Minha Conta'} <ArrowRight size={18} />
               </>
             )}
           </button>
