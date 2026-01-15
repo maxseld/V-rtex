@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from './components/ui/Layout';
 import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
@@ -14,57 +14,94 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   // Buscar projetos do Supabase com filtro explícito de usuário (Segurança Extra)
-  const fetchProjects = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  // Envolvido em useCallback para evitar recriações desnecessárias e loops
+  const fetchProjects = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('user_id', user.id) // Defesa em profundidade: não confia apenas no RLS
-      .order('last_edited', { ascending: false });
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('last_edited', { ascending: false });
 
-    if (error) {
-      console.error('Erro ao buscar projetos:', error);
-      return;
+      if (error) {
+        console.error('Erro ao buscar projetos:', error);
+        return;
+      }
+
+      if (data) {
+        const formattedProjects: VSLConfig[] = data.map(item => ({
+          id: item.id,
+          name: item.name,
+          videoUrl: item.video_url,
+          ratio: item.ratio as any,
+          primaryColor: item.primary_color,
+          retentionSpeed: item.retention_speed,
+          hasDelay: item.has_delay,
+          delaySeconds: item.delay_seconds,
+          views: item.views || 0,
+          lastEdited: item.last_edited
+        }));
+        setProjects(formattedProjects);
+      }
+    } catch (err) {
+      console.error("Falha ao sincronizar projetos:", err);
     }
+  }, []);
 
-    if (data) {
-      const formattedProjects: VSLConfig[] = data.map(item => ({
-        id: item.id,
-        name: item.name,
-        videoUrl: item.video_url,
-        ratio: item.ratio as any,
-        primaryColor: item.primary_color,
-        retentionSpeed: item.retention_speed,
-        hasDelay: item.has_delay,
-        delaySeconds: item.delay_seconds,
-        views: item.views || 0,
-        lastEdited: item.last_edited
-      }));
-      setProjects(formattedProjects);
-    }
-  };
-
+  // Inicialização e Listener de Auth - Dependências limpas para evitar loops
   useEffect(() => {
     const initializeAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUserEmail(session.user.email!);
-        setActivePage('dashboard');
-        await fetchProjects();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUserEmail(session.user.email!);
+          setActivePage('dashboard');
+          
+          // Busca inicial de dados
+          const { data, error } = await supabase
+            .from('projects')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .order('last_edited', { ascending: false });
+          
+          if (!error && data) {
+            setProjects(data.map(item => ({
+              id: item.id,
+              name: item.name,
+              videoUrl: item.video_url,
+              ratio: item.ratio as any,
+              primaryColor: item.primary_color,
+              retentionSpeed: item.retention_speed,
+              hasDelay: item.has_delay,
+              delaySeconds: item.delay_seconds,
+              views: item.views || 0,
+              lastEdited: item.last_edited
+            })));
+          }
+        }
+      } catch (err) {
+        console.error("Erro na inicialização de autenticação:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     initializeAuth();
 
+    // Listener de mudanças de estado (Login/Logout/Token Refresh)
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUserEmail(session.user.email!);
-        if (activePage === 'auth') {
-          setActivePage('dashboard');
-          await fetchProjects();
+        
+        // Só muda para dashboard se o usuário estiver tentando logar (página auth)
+        // Isso evita que o usuário saia do Editor caso a sessão atualize sozinha
+        setActivePage(prev => (prev === 'auth' ? 'dashboard' : prev));
+        
+        if (event === 'SIGNED_IN') {
+           fetchProjects();
         }
       } else {
         setUserEmail('');
@@ -76,7 +113,7 @@ function App() {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, [activePage]);
+  }, [fetchProjects]);
 
   const handleLogin = (email: string) => {
     setUserEmail(email);
@@ -107,7 +144,7 @@ function App() {
       .from('projects')
       .delete()
       .eq('id', id)
-      .eq('user_id', user.id); // Garante que você só deleta o que te pertence
+      .eq('user_id', user.id);
 
     if (error) {
       alert('Erro ao excluir projeto: ' + error.message);
@@ -142,7 +179,7 @@ function App() {
         .from('projects')
         .update(projectData)
         .eq('id', updatedConfig.id)
-        .eq('user_id', user.id); // Garante que você só atualiza o que te pertence
+        .eq('user_id', user.id);
       error = updateError;
     } else {
       const { error: insertError } = await supabase
