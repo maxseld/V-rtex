@@ -1,18 +1,34 @@
 import { VSLConfig } from '../types';
 
 /**
+ * Escapes special characters to prevent XSS or code injection in generated templates
+ */
+const escapeHTML = (str: string): string => {
+  return str
+    .replace(/[&<>"']/g, (m) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[m] || m);
+};
+
+/**
  * Generates the full HTML/JS code for the VSL with fixed retention logic and styling.
  */
 export const generateVSLCode = (config: VSLConfig): string => {
   const isVertical = config.ratio === '9:16';
   const maxWidth = isVertical ? '400px' : '900px';
-  const videoUrl = config.videoUrl;
-  const primaryColor = config.primaryColor;
+  const videoUrl = encodeURI(config.videoUrl); // Sanitize URL
+  const primaryColor = config.primaryColor.startsWith('#') ? config.primaryColor : '#2563eb';
   const curvaturaSensorial = config.retentionSpeed;
+  const projectName = escapeHTML(config.name);
 
-  // HTML + Script Template strictly following the user's instructions
+  // HTML + Script Template
   const htmlTemplate = `
-<div id="vsl-container" style="position: relative; width: 100%; max-width: ${maxWidth}; margin: 20px auto; aspect-ratio: ${config.ratio.replace(':', '/')}; background: #000; border-radius: 15px; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.5); font-family: sans-serif;">
+<div id="vsl-container-${Math.floor(Math.random() * 1000)}" style="position: relative; width: 100%; max-width: ${maxWidth}; margin: 20px auto; aspect-ratio: ${config.ratio.replace(':', '/')}; background: #000; border-radius: 15px; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.5); font-family: sans-serif;">
+    <!-- Project: ${projectName} -->
     <video id="vsl-video" autoplay muted playsinline onclick="togglePlay()" style="width: 100%; height: 100%; object-fit: cover; cursor: pointer;">
         <source src="${videoUrl}" type="video/mp4">
     </video>
@@ -32,11 +48,10 @@ export const generateVSLCode = (config: VSLConfig): string => {
     (function() {
         const video = document.getElementById('vsl-video');
         const progressBar = document.getElementById('progress-bar');
-        const curvatura = ${curvaturaSensorial}; // Valor do Slider (0.1 a 1.0)
+        const curvatura = ${curvaturaSensorial};
 
         video.addEventListener('timeupdate', () => {
             if (video.duration) {
-                // A matemática Math.pow garante que 1^curvatura sempre seja 1 (ou seja, 100%)
                 let pct = Math.pow((video.currentTime / video.duration), curvatura) * 100;
                 progressBar.style.width = pct + '%';
             }
@@ -47,32 +62,33 @@ export const generateVSLCode = (config: VSLConfig): string => {
         };
 
         window.primeiroClique = function() {
+            if (!video) return;
             video.muted = false;
             video.currentTime = 0;
             video.play();
-            document.getElementById('vsl-overlay').style.display = 'none';
+            const overlay = document.getElementById('vsl-overlay');
+            if (overlay) overlay.style.display = 'none';
         }
         
         window.togglePlay = function() {
+            if (!video) return;
             if (video.paused) video.play(); else video.pause();
         }
     })();
 </script>
 `.trim();
 
-  // Return formatted Prompt + Code
   return `
 === PROMPT PARA IA / DESENVOLVEDOR ===
 
 OBJETIVO: Inserir o player de vídeo de alta conversão (VSL) abaixo no site.
 
 LOCALIZAÇÃO DESEJADA: 
-[ !!! INSIRA AQUI O LOCAL ONDE O VÍDEO DEVE APARECER (Ex: Abaixo do H1, Na seção de Hero, No topo da página de vendas) !!! ]
+[ !!! INSIRA AQUI O LOCAL ONDE O VÍDEO DEVE APARECER !!! ]
 
 INSTRUÇÕES TÉCNICAS:
 1. Copie o bloco de código abaixo integralmente.
-2. Cole-o como um elemento "HTML Personalizado" ou "Embed Code" no seu construtor de páginas (Wordpress, Elementor, Shopify, HTML puro, etc).
-3. Não altere os IDs ou Classes para garantir que o script de automação (Sincronização de Barra 12px e Retenção) funcione corretamente.
+2. Cole-o como um elemento "HTML Personalizado" ou "Embed Code".
 
 --- CÓDIGO DO PLAYER VORTEX ---
 

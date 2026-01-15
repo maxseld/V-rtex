@@ -13,7 +13,7 @@ function App() {
   const [currentProject, setCurrentProject] = useState<VSLConfig>(DEFAULT_VSL);
   const [loading, setLoading] = useState(true);
 
-  // Buscar projetos do Supabase
+  // Buscar projetos do Supabase com filtro explícito de usuário (Segurança Extra)
   const fetchProjects = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -21,6 +21,7 @@ function App() {
     const { data, error } = await supabase
       .from('projects')
       .select('*')
+      .eq('user_id', user.id) // Defesa em profundidade: não confia apenas no RLS
       .order('last_edited', { ascending: false });
 
     if (error) {
@@ -45,7 +46,6 @@ function App() {
     }
   };
 
-  // Verificar sessão inicial e configurar listener
   useEffect(() => {
     const initializeAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -59,7 +59,6 @@ function App() {
 
     initializeAuth();
 
-    // Ouvinte de mudanças de auth para lidar com Login/Logout em tempo real
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUserEmail(session.user.email!);
@@ -101,10 +100,14 @@ function App() {
   };
 
   const handleDeleteProject = async (id: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const { error } = await supabase
       .from('projects')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id); // Garante que você só deleta o que te pertence
 
     if (error) {
       alert('Erro ao excluir projeto: ' + error.message);
@@ -115,7 +118,10 @@ function App() {
 
   const handleSaveProject = async (updatedConfig: VSLConfig) => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      alert('Sessão expirada. Por favor, faça login novamente.');
+      return;
+    }
 
     const projectData = {
       name: updatedConfig.name,
@@ -135,7 +141,8 @@ function App() {
       const { error: updateError } = await supabase
         .from('projects')
         .update(projectData)
-        .eq('id', updatedConfig.id);
+        .eq('id', updatedConfig.id)
+        .eq('user_id', user.id); // Garante que você só atualiza o que te pertence
       error = updateError;
     } else {
       const { error: insertError } = await supabase
@@ -146,7 +153,7 @@ function App() {
 
     if (error) {
       console.error('Erro ao salvar projeto:', error);
-      alert('Falha ao salvar no banco de dados. Verifique sua conexão.');
+      alert('Falha ao salvar. Verifique se você tem permissão para esta operação.');
     } else {
       await fetchProjects();
       setActivePage('dashboard');
