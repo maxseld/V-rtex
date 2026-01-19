@@ -1,19 +1,16 @@
 import React from 'react';
 import { LogOut, Zap } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 
 interface LayoutProps {
   children: React.ReactNode;
   activePage: 'dashboard' | 'editor' | 'auth';
   onNavigate: (page: 'dashboard' | 'editor' | 'auth') => void;
   userEmail?: string;
+  onSignOut: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate, userEmail }) => {
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
-
+export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate, userEmail, onSignOut }) => {
+  
   if (activePage === 'auth') {
     return <main className="min-h-screen bg-slate-950 flex items-center justify-center p-4">{children}</main>;
   }
@@ -47,7 +44,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate
                 {userEmail ? userEmail.substring(0, 2).toUpperCase() : 'US'}
               </div>
               <button 
-                onClick={handleSignOut}
+                onClick={onSignOut}
                 className="text-slate-400 hover:text-red-400 transition-colors"
                 title="Sair"
               >

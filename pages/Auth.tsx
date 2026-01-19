@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Zap, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { Zap, Lock, Mail, ArrowRight } from 'lucide-react';
 
 interface AuthProps {
   onLogin: (email: string) => void;
@@ -11,37 +10,16 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-
-    try {
-      if (isLogin) {
-        const { error: signInError, data } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) throw signInError;
-        if (data.user) onLogin(data.user.email!);
-      } else {
-        const { error: signUpError, data } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (signUpError) throw signUpError;
-        if (data.user) {
-          alert('Conta criada com sucesso! Por favor, verifique seu e-mail.');
-          setIsLogin(true);
-        }
-      }
-    } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro na autenticação.');
-    } finally {
+    
+    // Simulação de delay de rede
+    setTimeout(() => {
+      onLogin(email);
       setLoading(false);
-    }
+    }, 800);
   };
 
   return (
@@ -51,31 +29,24 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           <Zap className="text-white w-7 h-7" fill="currentColor" />
         </div>
         <h1 className="text-3xl font-bold text-white mb-2">Vortex VSL</h1>
-        <p className="text-slate-400">Entre na sua conta para gerenciar seus players.</p>
+        <p className="text-slate-400">Entre na sua conta para gerenciar seus players (Modo Local).</p>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
         <div className="flex gap-4 mb-6 border-b border-slate-800 pb-4">
           <button 
             className={`flex-1 pb-2 text-sm font-medium transition-all ${isLogin ? 'text-vortex-accent border-b-2 border-vortex-accent' : 'text-slate-500 hover:text-slate-300'}`}
-            onClick={() => { setIsLogin(true); setError(null); }}
+            onClick={() => setIsLogin(true)}
           >
             Entrar
           </button>
           <button 
             className={`flex-1 pb-2 text-sm font-medium transition-all ${!isLogin ? 'text-vortex-accent border-b-2 border-vortex-accent' : 'text-slate-500 hover:text-slate-300'}`}
-            onClick={() => { setIsLogin(false); setError(null); }}
+            onClick={() => setIsLogin(false)}
           >
             Criar Conta
           </button>
         </div>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-400 text-sm">
-            <AlertCircle size={16} />
-            <span>{error}</span>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -94,7 +65,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Senha</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Senha (Simulado)</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
               <input 
@@ -117,7 +88,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
             ) : (
               <>
-                {isLogin ? 'Acessar Dashboard' : 'Criar Minha Conta'} <ArrowRight size={18} />
+                {isLogin ? 'Acessar Dashboard' : 'Criar Conta Local'} <ArrowRight size={18} />
               </>
             )}
           </button>
